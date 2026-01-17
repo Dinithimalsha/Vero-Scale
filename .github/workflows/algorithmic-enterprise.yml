@@ -22,7 +22,7 @@ jobs:
 
       - name: 🧱 Run Unit Tests (Math & Logic)
         run: |
-          npx prisma generate
+          npx prisma generate --schema=./packages/backend/prisma/schema.prisma
           npm run test:unit
         env:
           DATABASE_URL: "postgresql://mock:5432/test"
