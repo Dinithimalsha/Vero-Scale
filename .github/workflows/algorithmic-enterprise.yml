@@ -21,7 +21,9 @@ jobs:
         run: npm ci
 
       - name: 🧱 Run Unit Tests (Math & Logic)
-        run: npm run test:unit
+        run: |
+          npx prisma generate
+          npm run test:unit
         env:
           DATABASE_URL: "postgresql://mock:5432/test"
           JWT_SECRET: "mock-secret-key-for-testing"
