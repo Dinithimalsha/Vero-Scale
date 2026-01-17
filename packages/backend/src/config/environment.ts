@@ -8,6 +8,14 @@ import { z } from 'zod';
 
 dotenv.config();
 
+// 🛡️ TEST HARNESS BYPASS
+// If running in test mode, inject mock values to prevent Zod validation failure.
+if (process.env.NODE_ENV === 'test') {
+    process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://mock:5432/test';
+    process.env.JWT_SECRET = process.env.JWT_SECRET || 'mock-secret-key-32-chars-minimum-length-required';
+    process.env.PORT = process.env.PORT || '3000';
+}
+
 const envSchema = z.object({
     // Database
     DATABASE_URL: z.string().url(),
