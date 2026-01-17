@@ -1,0 +1,29 @@
+{
+  "name": "veroscale",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Unified Enterprise Operating System for Algorithmic Leadership",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm run dev --workspace=@veroscale/backend",
+    "dev:frontend": "npm run dev --workspace=@veroscale/frontend",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "test:unit": "npm run test:unit --workspaces",
+    "lint": "npm run lint --workspaces",
+    "lint:deps": "npm run lint:deps --workspace=@veroscale/backend",
+    "db:migrate": "npm run db:migrate --workspace=@veroscale/backend",
+    "db:seed": "npm run db:seed --workspace=@veroscale/backend",
+    "db:studio": "npm run db:studio --workspace=@veroscale/backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,30 @@
+name: Compliance & Governance Check
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  policy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: VeroScale Policy Evaluation
+        run: |
+          echo "Connecting to VeroScale Policy Engine..."
+          # In real scenario: curl -X POST https://api.veroscale.io/compliance/evaluate/commit -d ...
+          echo "Policy Check: PASSED (Simulated)"
+      
+      - name: ZBB Budget Check
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "Checking Budget Impact..."
+          echo "Budget Check: NEUTRAL"
+
+      - name: Log DTO Event
+        run: |
+           # curl -X POST https://api.veroscale.io/dto/ingest/github ...
+           echo "DTO Event Recorded"

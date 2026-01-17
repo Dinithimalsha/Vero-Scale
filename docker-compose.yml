@@ -1,0 +1,70 @@
+# VeroScale Docker Compose Configuration
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: veroscale-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: veroscale
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-veroscale_dev_password}
+      POSTGRES_DB: veroscale
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U veroscale -d veroscale" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # VeroScale Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: veroscale-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://veroscale:${DB_PASSWORD:-veroscale_dev_password}@db:5432/veroscale?schema=public
+      JWT_SECRET: ${JWT_SECRET:-veroscale-jwt-secret-change-in-production}
+      NODE_ENV: production
+      PORT: 3001
+      FRONTEND_URL: http://localhost:5173
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx for serving frontend (optional, for production)
+  nginx:
+    image: nginx:alpine
+    container_name: veroscale-nginx
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    profiles:
+      - production
+
+volumes:
+  postgres_data:
+
+
+networks:
+  default:
+    name: veroscale-network

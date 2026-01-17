@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # 1. Disposable Database
+  postgres_sandbox:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: sandbox_user
+      POSTGRES_PASSWORD: sandbox_password
+      POSTGRES_DB: algorithmic_enterprise_sandbox
+    ports:
+      - "5433:5432" # Expose on different port to avoid conflict
+    networks:
+      - sandbox_net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U sandbox_user -d algorithmic_enterprise_sandbox" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. The System Under Test (SUT)
+  backend_sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://sandbox_user:sandbox_password@postgres_sandbox:5432/algorithmic_enterprise_sandbox
+      POLLING_INTERVAL_MS: 1000
+    depends_on:
+      postgres_sandbox:
+        condition: service_healthy
+    networks:
+      - sandbox_net
+    entrypoint: [ "/bin/sh", "-c" ]
+    # Wait for DB -> Migrate -> Seed -> Start Server
+    command:
+      - |
+        npx prisma migrate deploy
+        npm run seed:peacetime
+        npm start
+
+  # 3. The Chaos Monkey (Test Runner)
+  chaos_runner:
+    image: node:18-alpine
+    working_dir: /app
+    volumes:
+      - ./:/app
+    environment:
+      # Inject DB URL so the verification script (which uses imports) can connect to the sandbox DB
+      DATABASE_URL: postgresql://sandbox_user:sandbox_password@postgres_sandbox:5432/algorithmic_enterprise_sandbox
+      TARGET_API_URL: http://backend_sandbox:3000
+    depends_on:
+      - backend_sandbox
+    networks:
+      - sandbox_net
+    # Execute the Black Swan simulation against the sandbox
+    command: [ "npx", "tsx", "verify-phase-12-chaos.ts" ]
+
+networks:
+  sandbox_net:
+    driver: bridge

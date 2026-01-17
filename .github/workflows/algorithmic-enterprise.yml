@@ -1,0 +1,55 @@
+name: The Algorithmic Enterprise Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # 🧱 Level 1 & 2: Fast Feedback
+  verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: 'npm'
+      
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: 🧱 Run Unit Tests (Math & Logic)
+        run: npm run test:unit
+
+      # Spin up a temp Postgres for Integration tests
+      - name: Start Integration DB
+        run: docker-compose -f docker-compose.test.yml up -d postgres_test
+
+      - name: 🔗 Run Integration Tests (Service Flow)
+        run: |
+          npx prisma migrate deploy
+          npm run test:integration
+        env:
+          DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+
+  # 🌪️ Level 4: The Black Swan Simulation
+  chaos-certification:
+    needs: verification
+    if: github.ref == 'refs/heads/main' # Only run Chaos on main merge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: 🏗️ Build Sandbox
+        run: docker-compose -f docker-compose.sandbox.yml build
+
+      - name: 🌪️ Execute Black Monday Simulation
+        # This brings up the isolated stack and runs verify-phase-12-chaos.ts
+        # If the script fails (System dies), the pipeline fails.
+        run: docker-compose -f docker-compose.sandbox.yml up --exit-code-from chaos_runner
+
+      - name: 🧹 Teardown Sandbox
+        if: always()
+        run: docker-compose -f docker-compose.sandbox.yml down -v

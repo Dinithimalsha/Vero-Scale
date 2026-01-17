@@ -1,0 +1,44 @@
+# Docker ignore file - exclude unnecessary files from build context
+
+# Dependencies
+node_modules
+*/node_modules
+
+# Build outputs
+dist
+*/dist
+build
+*/build
+
+# Development files
+*.log
+*.md
+!README.md
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+
+# Test files
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+__tests__
+coverage
+
+# Documentation
+docs
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db

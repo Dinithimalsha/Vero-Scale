@@ -1,0 +1,1117 @@
+// VeroScale Database Schema
+// Modular Monolith with strict boundaries
+// Implements CEO-approved Phase 1 & 2 data models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CORE: Users & Organizations
+// ═══════════════════════════════════════════════════════════════════
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Feature/Bug/Debt ratio configuration (Heijunka Mix Control)
+  featureRatio Int @default(60) // Percentage
+  bugRatio     Int @default(20)
+  debtRatio    Int @default(20)
+
+  // Takt time configuration (per CEO review: connect to demand)
+  taktTimeHours Float? // Customer demand rate in hours
+
+  users                  User[]
+  pitches                ProductionPitch[]
+  tasks                  Task[]
+  andonEvents            AndonEvent[]
+  systemHealth           SystemHealth?
+  ipAgreements           IpAgreement[]
+  vestingGrants          VestingGrant[]
+  unitEconomicsSnapshots DailyUnitEconomics[]
+  transactions           Transaction[]
+  issueTrees             IssueTree[]
+  sevenSDiagnostics      SevenSDiagnostic[]
+  jobScorecards          JobScorecard[]
+  feedbackEntries        FeedbackEntry[]
+  analyticsSnapshots     AnalyticsSnapshot[]
+  teams                  Team[]
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  name           String
+  role           UserRole     @default(MEMBER)
+  preferredMode  UIMode       @default(MANAGER)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Module relationships
+  ipAgreement      IpAgreement?
+  vestingGrant     VestingGrant?
+  assignedTasks    Task[]
+  andonResolutions AndonEvent[]    @relation("ResolvedBy")
+  andonClaims      AndonEvent[]    @relation("ClaimedBy")
+  givenFeedback    FeedbackEntry[] @relation("FeedbackGiver")
+  receivedFeedback FeedbackEntry[] @relation("FeedbackReceiver")
+
+  // Team relationship (Phase 10)
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id])
+
+  @@index([organizationId])
+}
+
+model Team {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String
+  
+  // Calibration Engine (Phase 10)
+  volatilityFactor Float @default(0.2) // Specific to this team's history
+
+  members        User[]
+  simulationRuns SimulationRun[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, name])
+}
+
+model SimulationRun {
+  id              String        @id @default(uuid())
+  teamId          String
+  team            Team          @relation(fields: [teamId], references: [id])
+  budgetRequestId String?       @unique // Optional link to finance
+  budgetRequest   BudgetRequest? @relation(fields: [budgetRequestId], references: [id])
+  
+  // Prediction Snapshot
+  volatilityFactorUsed Float
+  p50                  Float
+  p90                  Float
+  predictedAt          DateTime @default(now())
+
+  // The Truth (Calibration)
+  actualDuration     Float?
+  calibrationApplied Boolean @default(false)
+  calibratedAt       DateTime?
+
+  @@index([teamId])
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MEMBER
+  CONTRACTOR // Subject to IP Airlock
+}
+
+enum UIMode {
+  MAKER
+  MANAGER
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// OPERATIONS MODULE: Heijunka (Production Leveling)
+// CEO Review: Implements "Pull" system with Product Mix Control
+// ═══════════════════════════════════════════════════════════════════
+
+model ProductionPitch {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  name           String
+  startTime      DateTime
+  endTime        DateTime
+  capacityPoints Int // Derived from rolling avg velocity
+  currentLoad    Int         @default(0)
+  status         PitchStatus @default(OPEN)
+
+  // Product mix tracking (Heijunka leveling by type)
+  featurePoints Int @default(0)
+  bugPoints     Int @default(0)
+  debtPoints    Int @default(0)
+
+  // Takt time alignment (per CEO: connect output to demand)
+  demandUnitsExpected Int? // Expected customer value units
+  demandUnitsActual   Int? // Actual delivered
+
+  tasks Task[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, startTime])
+  @@index([status])
+}
+
+enum PitchStatus {
+  OPEN
+  LOCKED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Task {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  pitchId String?
+  pitch   ProductionPitch? @relation(fields: [pitchId], references: [id])
+
+  assigneeId String?
+  assignee   User?   @relation(fields: [assigneeId], references: [id])
+
+  externalId    String? // JIRA/Linear/GitHub Issue ID
+  title         String
+  description   String?    @db.Text
+  taskType      TaskType
+  storyPoints   Int
+  
+  // Heijunka Scoring (Persisted for Dampening)
+  rawQvScore    Decimal    @default(0) @db.Decimal(5, 2) // Raw "Voice of Customer" signal
+  priorityScore Decimal    @db.Decimal(5, 2) // Smoothed "WSJF" score (Low Pass Filtered)
+  
+  status        TaskStatus @default(BACKLOG)
+
+  // Muda (Waste) tracking
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  inReviewAt  DateTime?
+  completedAt DateTime?
+
+  // Idle time tracking (Waiting waste)
+  totalIdleMinutes Int       @default(0)
+  lastIdleStart    DateTime?
+
+  // Cost tracking for WIP inventory valuation
+  estimatedHours Float?
+  hourlyRate     Decimal? @db.Decimal(10, 2)
+
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([pitchId])
+  @@index([taskType])
+}
+
+enum TaskType {
+  FEATURE
+  BUG
+  DEBT
+}
+
+enum TaskStatus {
+  BACKLOG
+  READY
+  IN_PROGRESS
+  IN_REVIEW
+  BLOCKED
+  DONE
+  CANCELLED
+}
+
+// Velocity snapshots for historical tracking
+model VelocitySnapshot {
+  id             String @id @default(uuid())
+  organizationId String
+
+  pitchId    String
+  recordedAt DateTime @default(now())
+
+  completedPoints    Int
+  pitchDurationHours Float
+
+  // Per-type breakdown
+  featurePoints Int
+  bugPoints     Int
+  debtPoints    Int
+
+  @@index([organizationId, recordedAt])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// OPERATIONS MODULE: Jidoka (Andon System)
+// CEO Review: Must facilitate "swarming" not just alerts
+// ═══════════════════════════════════════════════════════════════════
+
+model AndonEvent {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  triggerSource AndonTrigger
+  severityLevel AndonSeverity
+  status        AndonStatus   @default(ACTIVE)
+
+  // CI/CD context
+  commitHash      String?
+  commitAuthor    String?
+  branchName      String?
+  pipelineUrl     String?
+  errorLog        String? @db.Text
+  coveragePercent Float?
+
+  // Swarming support (per CEO: facilitate collaboration)
+  claimedById    String?
+  claimedBy      User?     @relation("ClaimedBy", fields: [claimedById], references: [id])
+  claimedAt      DateTime?
+  swarmChannelId String? // Slack thread/channel for swarming
+
+  // Resolution
+  resolvedAt       DateTime?
+  resolvedById     String?
+  resolvedBy       User?     @relation("ResolvedBy", fields: [resolvedById], references: [id])
+  rootCause        String?   @db.Text
+  preventionAction String?   @db.Text
+
+  // MTTR tracking
+  mttrMinutes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+}
+
+enum AndonTrigger {
+  CI_PIPELINE
+  COVERAGE_DROP
+  TEST_FAILURE
+  DEPLOYMENT_FAILURE
+  USER_MANUAL
+  MONITORING_ALERT
+}
+
+enum AndonSeverity {
+  WARNING
+  STOP_LINE
+}
+
+enum AndonStatus {
+  ACTIVE
+  CLAIMED
+  SWARMING
+  RESOLVED
+}
+
+// System health singleton (per org)
+model SystemHealth {
+  id             String       @id @default(uuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  status              HealthStatus @default(GREEN)
+  lastUpdated         DateTime     @default(now())
+  activeIncidentCount Int          @default(0)
+
+  // Branch lock status
+  mainBranchLocked Boolean @default(false)
+  lockReason       String?
+
+  @@index([status])
+}
+
+enum HealthStatus {
+  GREEN
+  YELLOW
+  RED
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// OPERATIONS MODULE: Muda (Waste) Tracking
+// CEO Review: Use "stale flag" threshold (>30 days) for overproduction
+// ═══════════════════════════════════════════════════════════════════
+
+model FeatureFlag {
+  id             String @id @default(uuid())
+  organizationId String
+
+  flagKey    String
+  flagName   String
+  createdAt  DateTime  @default(now())
+  deployedAt DateTime?
+
+  // Overproduction detection (per CEO: 30-day stale threshold)
+  adoptionPercent Float?
+  lastMeasuredAt  DateTime?
+  isStale         Boolean   @default(false) // Flagged if >30 days with <5% adoption
+
+  @@unique([organizationId, flagKey])
+  @@index([organizationId, isStale])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LEGAL MODULE: IP Airlock
+// CEO Review: Gatekeeper pattern for contractors
+// ═══════════════════════════════════════════════════════════════════
+
+model IpAgreement {
+  id             String       @id @default(uuid())
+  userId         String       @unique
+  user           User         @relation(fields: [userId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  documentType AgreementType   @default(PIIAA)
+  status       AgreementStatus @default(PENDING)
+
+  signedDate         DateTime?
+  expirationDate     DateTime?
+  documentUrl        String? // S3/cloud storage URL
+  docusignEnvelopeId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+}
+
+enum AgreementType {
+  PIIAA // Proprietary Information and Inventions Assignment Agreement
+  NDA // Non-Disclosure Agreement
+  CONTRACTOR_IP // Contractor IP Assignment
+}
+
+enum AgreementStatus {
+  PENDING
+  SENT
+  VIEWED
+  SIGNED
+  EXPIRED
+  REVOKED
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LEGAL MODULE: Equity Vesting
+// CEO Review: Support cliff logic and acceleration triggers
+// ═══════════════════════════════════════════════════════════════════
+
+model VestingGrant {
+  id             String       @id @default(uuid())
+  userId         String       @unique
+  user           User         @relation(fields: [userId], references: [id])
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  grantType       GrantType @default(ISO)
+  totalShares     Int
+  vestedShares    Int       @default(0)
+  exercisedShares Int       @default(0)
+  strikePrice     Decimal   @db.Decimal(10, 4)
+
+  // Schedule
+  grantDate      DateTime
+  cliffDate      DateTime // 1 year from grant typically
+  vestingEndDate DateTime // 4 years from grant typically
+  vestingMonths  Int      @default(48)
+  cliffMonths    Int      @default(12)
+
+  // 83(b) Election tracking
+  is83bFiled          Boolean   @default(false)
+  election83bDeadline DateTime?
+  election83bFiledAt  DateTime?
+
+  // Cliff approval (per CEO: last window before 25% ownership)
+  cliffApproved      Boolean   @default(false)
+  cliffApprovalDate  DateTime?
+  cliffApprovalNotes String?   @db.Text
+
+  // Acceleration triggers (per CEO: support single/double trigger)
+  singleTriggerAccel  Boolean @default(false)
+  doubleTriggerAccel  Boolean @default(false)
+  accelerationPercent Int? // Percentage to accelerate on trigger
+
+  status VestingStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, cliffDate])
+  @@index([status])
+}
+
+enum GrantType {
+  ISO // Incentive Stock Option
+  NSO // Non-Qualified Stock Option
+  RSA // Restricted Stock Award
+  RSU // Restricted Stock Unit
+}
+
+enum VestingStatus {
+  PENDING_START
+  ACTIVE
+  PAUSED
+  TERMINATED
+  FULLY_VESTED
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FINANCE MODULE: Transactions & Ledger
+// ═══════════════════════════════════════════════════════════════════
+
+model Transaction {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  // Plaid data
+  plaidTransactionId String? @unique
+  accountId          String?
+
+  date        DateTime
+  description String
+  amount      Decimal  @db.Decimal(12, 2)
+  currency    String   @default("USD")
+
+  // Categorization (ML-assisted)
+  category          TransactionCategory
+  subcategory       String?
+  isAutoCategorized Boolean             @default(false)
+  confidenceScore   Float?
+
+  // COGS vs OPEX distinction (per CEO: critical for Gross Margin)
+  costType CostType?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, date])
+  @@index([category])
+  @@index([costType])
+}
+
+enum TransactionCategory {
+  REVENUE
+  COGS
+  OPEX
+  PAYROLL
+  TAX
+  TRANSFER
+  OTHER
+}
+
+enum CostType {
+  COGS_HOSTING // Server costs
+  COGS_SUPPORT // Customer support
+  COGS_THIRD_PARTY // Third-party APIs
+  OPEX_MARKETING
+  OPEX_SALES
+  OPEX_RD // R&D (capitalized or expensed)
+  OPEX_GA // General & Administrative
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FINANCE MODULE: Unit Economics
+// CEO Review: CAC Attribution needs Time-to-Value allocation
+// ═══════════════════════════════════════════════════════════════════
+
+model DailyUnitEconomics {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  date DateTime @db.Date
+
+  // CAC Components
+  salesMarketingExpense Decimal @db.Decimal(12, 2)
+  newCustomersAcquired  Int
+  cacValue              Decimal @db.Decimal(10, 2)
+
+  // LTV Components
+  arpa               Decimal @db.Decimal(10, 2) // Avg Revenue Per Account
+  grossMarginPercent Decimal @db.Decimal(5, 4)
+  churnRate          Decimal @db.Decimal(5, 4)
+  ltvValue           Decimal @db.Decimal(10, 2)
+
+  // Health Metrics
+  ltvCacRatio      Decimal @db.Decimal(5, 2)
+  cacPaybackMonths Decimal @db.Decimal(5, 2)
+
+  // Runway
+  cashBalance  Decimal @db.Decimal(14, 2)
+  burnRate     Decimal @db.Decimal(12, 2)
+  runwayMonths Decimal @db.Decimal(5, 2)
+
+  // Rule of 40
+  growthRatePercent   Decimal @db.Decimal(5, 2)
+  profitMarginPercent Decimal @db.Decimal(5, 2)
+  ruleOf40Score       Decimal @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, date])
+  @@index([organizationId, date])
+}
+
+// Time-to-Value allocation (per CEO: link engineering hours to CAC)
+model CacAttribution {
+  id             String @id @default(uuid())
+  organizationId String
+
+  period DateTime @db.Date // Monthly period
+
+  // Engineering allocation to customer acquisition features
+  engineeringHoursTotal     Float
+  engineeringHoursGrowth    Float // Hours on growth features
+  engineeringHoursRetention Float // Hours on retention features
+
+  // Cost allocation
+  engineeringCostTotal Decimal @db.Decimal(12, 2)
+  allocatedToCac       Decimal @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, period])
+  @@index([organizationId, period])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DATA MODULE: Analytics Snapshots
+// ETL Pipeline aggregated metrics for North Star Dashboard
+// ═══════════════════════════════════════════════════════════════════
+
+model AnalyticsSnapshot {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  date DateTime @db.Date
+
+  // Operations Metrics
+  velocityTrend    Float @default(0)
+  andonEventsCount Int   @default(0)
+  mttrMinutes      Float @default(0)
+  wasteScore       Float @default(0)
+
+  // Finance Metrics
+  revenue      Decimal @default(0) @db.Decimal(14, 2)
+  mrr          Decimal @default(0) @db.Decimal(14, 2)
+  cac          Decimal @default(0) @db.Decimal(10, 2)
+  ltv          Decimal @default(0) @db.Decimal(10, 2)
+  ltvCacRatio  Decimal @default(0) @db.Decimal(5, 2)
+  runwayMonths Decimal @default(0) @db.Decimal(5, 2)
+  churnRate    Decimal @default(0) @db.Decimal(5, 4)
+
+  // Team Metrics
+  teamSize      Int @default(0)
+  openRoles     Int @default(0)
+  feedbackCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, date])
+  @@index([organizationId, date])
+}
+
+// CEO Review: AI-assisted decision journal, not rigid enforcer
+// ═══════════════════════════════════════════════════════════════════
+
+model IssueTree {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  title        String
+  rootQuestion String   @db.Text
+  treeType     TreeType @default(ISSUE)
+
+  // AI assistance (per CEO: suggest, don't enforce)
+  aiSuggestionsEnabled Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  nodes IssueTreeNode[]
+
+  @@index([organizationId])
+}
+
+enum TreeType {
+  ISSUE // Problem breakdown
+  HYPOTHESIS // Decision tree
+  OPTION // Alternative evaluation
+}
+
+model IssueTreeNode {
+  id     String    @id @default(uuid())
+  treeId String
+  tree   IssueTree @relation(fields: [treeId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   IssueTreeNode?  @relation("NodeHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children IssueTreeNode[] @relation("NodeHierarchy")
+
+  label      String
+  hypothesis String? @db.Text
+  notes      String? @db.Text
+
+  // Live data linking
+  dataSourceType  DataSourceType?
+  dataSourceQuery String?
+  liveValue       Decimal?        @db.Decimal(14, 2)
+  lastRefreshed   DateTime?
+
+  // AI suggestions (soft enforcement)
+  aiMeceWarning String? // Suggestion if not exhaustive
+
+  position   Int     @default(0)
+  isResolved Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([treeId, parentId])
+}
+
+enum DataSourceType {
+  UNIT_ECONOMICS
+  VELOCITY
+  REVENUE
+  CUSTOM_QUERY
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STRATEGY MODULE: McKinsey 7S Diagnostic
+// CEO Review: Link to actual system/repo status
+// ═══════════════════════════════════════════════════════════════════
+
+model SevenSDiagnostic {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  surveyDate      DateTime @default(now())
+  respondentCount Int
+
+  // Scores (1-10 scale)
+  strategyScore     Decimal @db.Decimal(3, 1)
+  structureScore    Decimal @db.Decimal(3, 1)
+  systemsScore      Decimal @db.Decimal(3, 1)
+  sharedValuesScore Decimal @db.Decimal(3, 1)
+  styleScore        Decimal @db.Decimal(3, 1)
+  staffScore        Decimal @db.Decimal(3, 1)
+  skillsScore       Decimal @db.Decimal(3, 1)
+
+  // System links (per CEO: connect to actual repos/services)
+  systemLinks Json? // { "finance": { "status": "legacy", "repo": "..." }, ... }
+
+  misalignmentFlags String[]
+  recommendations   String[] @db.Text
+
+  @@index([organizationId, surveyDate])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// HUMAN CAPITAL MODULE: Topgrading
+// CEO Review: Focus on data, avoid bias-prone keywords
+// ═══════════════════════════════════════════════════════════════════
+
+model JobScorecard {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  title        String
+  department   String?
+  outcomes     String[] // Clear success metrics
+  competencies String[] // Required skills
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  candidates CandidateEvaluation[]
+
+  @@index([organizationId])
+}
+
+model CandidateEvaluation {
+  id          String       @id @default(uuid())
+  scorecardId String
+  scorecard   JobScorecard @relation(fields: [scorecardId], references: [id], onDelete: Cascade)
+
+  candidateName  String
+  candidateEmail String?
+
+  // Pattern detection (per CEO: trajectory data, not keyword bias)
+  jobHistory         Json? // Array of {company, role, tenure, bossRating, reasonForLeaving}
+  externalLocusCount Int     @default(0)
+  tenurePattern      String? // "stable", "jumper", "growth"
+
+  overallScore   Int? // 1-10
+  riskFlags      String[]
+  strengths      String[]
+  recommendation String?  @db.Text
+
+  status EvaluationStatus @default(IN_PROGRESS)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scorecardId, status])
+}
+
+enum EvaluationStatus {
+  IN_PROGRESS
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// HUMAN CAPITAL MODULE: Radical Candor Feedback
+// CEO Review: Private "mirror" for self-reflection, NOT surveillance
+// ═══════════════════════════════════════════════════════════════════
+
+model FeedbackEntry {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  giverId     String
+  giver       User   @relation("FeedbackGiver", fields: [giverId], references: [id])
+  recipientId String
+  recipient   User   @relation("FeedbackReceiver", fields: [recipientId], references: [id])
+
+  content      String       @db.Text
+  feedbackType FeedbackType
+  isDraft      Boolean      @default(true) // Only analyze when sending
+
+  // NLP Analysis - PRIVATE TO GIVER (per CEO: mirror, not surveillance)
+  // These fields are only visible to the feedback giver
+  careScore      Decimal?        @db.Decimal(3, 2) // 0-1
+  challengeScore Decimal?        @db.Decimal(3, 2) // 0-1
+  candorQuadrant CandorQuadrant?
+  toneSuggestion String?         @db.Text
+
+  // Aggregate stats only (anonymized for org-level health)
+  contributesToOrgStats Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, giverId])
+  @@index([giverId, recipientId])
+}
+
+enum FeedbackType {
+  PRAISE
+  CONSTRUCTIVE
+  PERFORMANCE_REVIEW
+  ONE_ON_ONE
+}
+
+enum CandorQuadrant {
+  RADICAL_CANDOR // High care, high challenge ✓
+  RUINOUS_EMPATHY // High care, low challenge
+  OBNOXIOUS_AGGRESSION // Low care, high challenge
+  MANIPULATIVE_INSINCERITY // Low care, low challenge
+}
+
+// Org-level feedback health (anonymized aggregate only)
+model FeedbackHealthMetrics {
+  id             String @id @default(uuid())
+  organizationId String
+
+  period DateTime @db.Date // Monthly
+
+  totalFeedbackCount Int
+  praiseCount        Int
+  constructiveCount  Int
+
+  // Aggregate quadrant distribution (no individual data)
+  radicalCandorPercent  Float
+  ruinousEmpathyPercent Float
+  aggressionPercent     Float
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, period])
+  @@index([organizationId, period])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ALGORITHMIC ENTERPRISE MODULE: Digital Twin (DTO)
+// Section 2: Event Sourcing Architecture for Process Mining
+// ═══════════════════════════════════════════════════════════════════
+
+model DtoActivityEvent {
+  id             String @id @default(uuid())
+  organizationId String
+
+  timestamp      DateTime @default(now())
+  actorId        String
+  actorType      String // HUMAN, AGENT, SYSTEM
+  duration       Int // milliseconds
+  costAllocation Float    @default(0)
+  caseId         String // Process instance ID
+  nodeType       String // e.g., CODE_REVIEW, DEPLOY, MEETING
+  metadata       Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([organizationId, timestamp])
+  @@index([caseId])
+  @@index([actorId])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ALGORITHMIC ENTERPRISE MODULE: Prediction Markets
+// Section 3: CPMM Algorithm with Binary Options
+// ═══════════════════════════════════════════════════════════════════
+
+model PredictionMarket {
+  id             String @id @default(uuid())
+  organizationId String
+
+  question           String
+  description        String?  @db.Text
+  oracleType         String // JIRA_TICKET, STRIPE_REVENUE, GITHUB_RELEASE, MANUAL
+  oracleSourceUrl    String?
+  resolutionLogic    String?
+  expiryTimestamp    DateTime
+  liquidityParameter Float    @default(1000)
+  status             String   @default("OPEN") // OPEN, CLOSED, RESOLVED
+  resolvedOutcome    String? // YES, NO
+
+  // CPMM Pool State (x * y = k)
+  yesTokens Float @default(1000)
+  noTokens  Float @default(1000)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trades   MarketTrade[]
+  balances MarketUserBalance[]
+  budgetRequests BudgetRequest[]
+
+  @@index([organizationId, status])
+  @@index([expiryTimestamp])
+}
+
+model MarketTrade {
+  id       String           @id @default(uuid())
+  marketId String
+  market   PredictionMarket @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  buyerId   String
+  outcome   String // YES, NO
+  price     Float // Implied probability (0.00 to 1.00)
+  quantity  Float
+  usdAmount Float
+
+  executionTime DateTime @default(now())
+
+  @@index([marketId, executionTime])
+  @@index([buyerId])
+}
+
+model MarketUserBalance {
+  id       String           @id @default(uuid())
+  userId   String
+  marketId String
+  market   PredictionMarket @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  yesShares  Float @default(0)
+  noShares   Float @default(0)
+  usdBalance Float @default(1000)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, marketId])
+  @@index([marketId])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ALGORITHMIC ENTERPRISE MODULE: Quadratic Voting
+// Section 4: Voice Credits with Cost = N² Formula
+// ═══════════════════════════════════════════════════════════════════
+
+model QvSession {
+  id             String @id @default(uuid())
+  organizationId String
+
+  title                  String
+  description            String?  @db.Text
+  expiresAt              DateTime
+  status                 String   @default("OPEN") // OPEN, CLOSED, TALLIED
+  initialCreditsPerVoter Int      @default(1000)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options QvOption[]
+  ballots QvBallot[]
+
+  @@index([organizationId, status])
+  @@index([expiresAt])
+}
+
+model QvOption {
+  id        String    @id @default(uuid())
+  sessionId String
+  session   QvSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String? @db.Text
+  category    String?
+  totalVotes  Int     @default(0)
+  totalCost   Int     @default(0)
+  rank        Int?
+
+  createdAt DateTime @default(now())
+
+  votes QvVote[]
+
+  @@index([sessionId])
+}
+
+model QvBallot {
+  id        String    @id @default(uuid())
+  sessionId String
+  session   QvSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  voterId   String
+
+  initialCredits   Int
+  totalCost        Int
+  remainingCredits Int
+  signature        String? // Cryptographic audit signature
+
+  createdAt DateTime @default(now())
+
+  votes QvVote[]
+
+  @@unique([sessionId, voterId])
+  @@index([sessionId])
+}
+
+model QvVote {
+  id       String   @id @default(uuid())
+  ballotId String
+  ballot   QvBallot @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  optionId String
+  option   QvOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  voteCount Int
+  cost      Int // voteCount² (quadratic)
+
+  @@index([ballotId])
+  @@index([optionId])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ALGORITHMIC ENTERPRISE MODULE: ZBB AI Agents
+// Section 5: Budget Requests and Zombie Spend Detection
+// ═══════════════════════════════════════════════════════════════════
+
+model BudgetRequest {
+  id             String @id @default(uuid())
+  organizationId String
+  requesterId    String
+
+  category        String
+  vendor          String?
+  amount          Float
+  justification   String  @db.Text
+  historicalSpend Float?
+  historicalROI   Float?
+  status          String  @default("PENDING") // PENDING, APPROVED, REJECTED, NEEDS_INFO
+
+  // Market Confidence Integration
+  predictionMarketId String?
+  predictionMarket   PredictionMarket? @relation(fields: [predictionMarketId], references: [id])
+
+  // Simulation Integration (Phase 10)
+  simulationRun SimulationRun?
+
+  // Agent conversation log
+  agentConversation Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([requesterId])
+}
+
+model ZombieSpendAlert {
+  id             String @id @default(uuid())
+  organizationId String
+
+  resourceType      String // SAAS_SEAT, CLOUD_RESOURCE, SUBSCRIPTION, LICENSE
+  resourceName      String
+  vendor            String
+  monthlyCost       Float
+  lastActiveDate    DateTime?
+  daysSinceActive   Int
+  recommendedAction String // CANCEL, DOWNGRADE, CONSOLIDATE, INVESTIGATE
+  status            String    @default("DETECTED") // DETECTED, ACKNOWLEDGED, RESOLVED, IGNORED
+  potentialSavings  Float
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([potentialSavings])
+}
+
+// -------------------------------------------------------------------
+// ALGORITHMIC ENTERPRISE MODULE: Compliance (Policy-as-Code)
+// Section 6: OPA-style Policy Enforcement and Audit
+// -------------------------------------------------------------------
+
+model CompliancePolicy {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name        String
+  description String? @db.Text
+  type        String // GIT_COMMIT, DEPLOYMENT, DATA_ACCESS, BUDGET_APPROVAL, etc.
+  rules       Json // Array of PolicyRule objects
+  enabled     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([organizationId, type])
+  @@index([organizationId, enabled])
+}
+
+model ComplianceAuditLog {
+  id             String @id @default(uuid())
+  organizationId String
+
+  policyType String
+  decision   String // ALLOW, DENY, WARN
+  violations Json? // Array of violations
+  warnings   Json? // Array of warnings
+  inputMap   Json? // Snapshot of input data used for evaluation
+  metadata   Json? // Context (userId, etc.)
+
+  timestamp DateTime @default(now())
+
+  @@index([organizationId, timestamp])
+  @@index([policyType])
+  @@index([decision])
+}
+
