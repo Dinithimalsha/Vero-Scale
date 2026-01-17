@@ -10,6 +10,7 @@
         "start": "node dist/index.js",
         "test": "vitest",
         "test:unit": "vitest run",
+        "test:integration": "vitest run --config vitest.integration.config.ts",
         "seed:peacetime": "ts-node scripts/seed-peacetime.ts",
         "lint": "eslint src --ext .ts",
         "lint:deps": "dependency-cruiser --config .dependency-cruiser.cjs src",
