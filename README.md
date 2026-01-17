@@ -1,55 +1,76 @@
 # VeroScale
+> **Stop Managing by Gut Feel. Start Leading by Algorithm.**
 
-**The Unified Enterprise Operating System for Algorithmic Leadership**
-
-> *"The machine must be built to build the machine."*
-
-VeroScale bridges the ontological gap between deterministic engineering and probabilistic enterprise management. It is a comprehensive EOS designed specifically for the technical mind, operationalizing "Algorithmic Leadership" through Toyota Production System principles, SaaS unit economics, and structured governance.
+VeroScale is the first Enterprise Operating System (EOS) that operationalizes **Algorithmic Leadership**. We bridge the gap between engineering reality and business strategy, giving you a "Live Ledger" for your entire company's physics.
 
 ---
 
-## 🏗️ Architecture
+## The Problem: Enterprise Drift
+Most companies drift because Engineering and Finance speak different languages.
+*   **Engineering** measures Velocity (Story Points).
+*   **Finance** measures Burn (Dollars).
+*   **Result**: No one measures Truth.
 
-**Modular Monolith** - Strict module boundaries with single deployment simplicity.
+## The Solution
+VeroScale applies the physics of manufacturing to the chaos of software:
 
-```
-veroscale/
-├── packages/
-│   ├── backend/           # Node.js/TypeScript API
-│   │   ├── src/
-│   │   │   ├── modules/
-│   │   │   │   ├── operations/    # Heijunka, Jidoka, Muda
-│   │   │   │   ├── finance/       # Unit Economics, Ledger
-│   │   │   │   ├── legal/         # IP Airlock, Vesting
-│   │   │   │   ├── strategy/      # MECE, 7S (Phase 3)
-│   │   │   │   └── human-capital/ # Topgrading (Phase 4)
-│   │   │   └── integrations/      # GitHub, Slack, DocuSign
-│   │   └── prisma/                # Database schema
-│   └── frontend/          # React/Vite UI
-│       └── src/
-│           ├── components/
-│           │   ├── layout/        # Dual-Mode Shell
-│           │   ├── operations/    # Heijunka Board, Andon
-│           │   ├── finance/       # J-Curve, Unit Economics
-│           │   └── legal/         # IP Airlock, Vesting
-│           └── stores/            # Zustand state
-└── package.json           # Monorepo root
-```
+1.  **Toyota Efficiency for SaaS**: We apply Heijunka (level-loading) and Jidoka (automation) to software delivery.
+2.  **Unit Economics Native**: We don't just track costs; we track the ROI of every commit.
+3.  **Governance as Code**: We automate IP assignment and vesting. If the code isn't clean, the legal docs aren't signed.
 
 ---
 
-## 🚀 Quick Start
+## � Business Modules
+
+### 1. The Operator (Efficiency)
+*   **Digital Heijunka**: Stop burnout and bottlenecks. We level-load your engineering capacity automatically based on real velocity, not wishful thinking.
+*   **Jidoka/Andon Cord**: When a build breaks, the pipeline locks. We force "swarm" behavior to fix quality issues instantly, reducing MTTR (Mean Time To Recovery).
+
+### 2. The Controller (Financial Truth)
+*   **Live Ledger**: Move beyond simple P&L. Track **LTV:CAC** ratios in real-time. Know exactly when you hit the "Rule of 40."
+*   **Vesting Engine**: Automate the "cliff." If a founder or employee isn't performing, the system flags the equity risks *before* they vest.
+
+---
+
+## 🏗️ Engineered for Scale
+VeroScale isn't just a dashboard; it's a **Modular Monolith** designed for strict boundary enforcement. We treat your business logic with the same rigor as mission-critical infrastructure.
+
+*   **Maker vs. Manager Mode**: A UI that respects your flow. Deep work mode (🌙) for builders; command center (☀️) for leaders.
+*   **Strict Boundaries**: Finance cannot import Operations directly. This ensures your financial data remains the "Source of Truth," uncorrupted by operational noise.
+
+---
+
+## 🛠️ Under the Hood (Technical Validation)
+Built on a modern, type-safe stack for maximum reliability.
+
+| Layer | Technology | Why? |
+|-------|------------|------|
+| **Core** | Node.js 20 LTS & TypeScript 5 | End-to-end type safety prevents runtime errors. |
+| **Data** | PostgreSQL 16 + Prisma | ACID compliance ensures ledger integrity. |
+| **Arch** | Hexagonal (Ports & Adapters) | Domain isolation allows modules to evolve independently. |
+
+---
+
+## � Get Algorithmic
+VeroScale is currently in **Private Beta**.
+
+*   **Deploy the MVP**: See the "Developer Preview" below to audit our code quality.
+*   **Book a Demo**: [Contact Sales](mailto:sales@veroscale.ai)
+*   **Connect**: Follow the "Live Ledger" journey on LinkedIn.
+
+---
+
+## 👨‍💻 Developer Preview (Run Locally)
+Want to audit the architecture? Use this quick start guide.
 
 ### Prerequisites
-
-- Node.js 20+
-- PostgreSQL 16+
-- pnpm or npm
+*   Node.js 20+
+*   PostgreSQL 16+
 
 ### Installation
-
 ```bash
 # Clone repository
+git clone https://github.com/Dinithimalsha/Vero-Scale.git
 cd "d:\Vero Scale"
 
 # Install dependencies
@@ -57,7 +78,7 @@ npm install
 
 # Set up environment
 cp packages/backend/.env.example packages/backend/.env
-# Edit .env with your database URL and secrets
+# Edit .env with your database URL
 
 # Generate Prisma client
 npm run db:generate --workspace=@veroscale/backend
@@ -72,124 +93,10 @@ npm run db:seed --workspace=@veroscale/backend
 npm run dev
 ```
 
-Access:
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:3001
-- **Health Check**: http://localhost:3001/health
+### Access
+*   **Frontend**: http://localhost:5173
+*   **Backend API**: http://localhost:3001
+*   **Health Check**: http://localhost:3001/health
 
 ---
-
-## 📦 Core Modules
-
-### Phase 1: The Operator (Current)
-
-| Module | Features |
-|--------|----------|
-| **Digital Heijunka** | Velocity-based capacity, Product mix control (Feature/Bug/Debt), WSJF prioritization |
-| **Jidoka/Andon** | Pipeline lock on failure, MTTR tracking, Slack swarming, GitHub webhook integration |
-| **IP Airlock** | PIIAA gatekeeper, DocuSign integration, Access enforcement |
-| **Vesting Engine** | Cliff alerts, 83(b) tracking, Single/double trigger acceleration |
-
-### Phase 2: The Controller (Planned)
-
-| Module | Features |
-|--------|----------|
-| **Live Ledger** | Plaid integration, ML categorization, COGS/OPEX distinction |
-| **Unit Economics** | CAC/LTV calculator, J-Curve, Rule of 40, Insolvency alerts |
-
----
-
-## 🎨 UI Modes
-
-VeroScale respects the **Maker/Manager dichotomy**:
-
-- **Maker Mode** 🌙: Minimal UI, focus protection, reduced notifications
-- **Manager Mode** ☀️: Full dashboard, real-time metrics, command center
-
-Toggle via the mode switch in the sidebar.
-
----
-
-## 🔌 API Endpoints
-
-### Operations
-
-```
-GET  /api/operations/velocity/:orgId      # Rolling velocity metrics
-GET  /api/operations/pitches/:orgId       # List production pitches
-POST /api/operations/pitches              # Create pitch
-POST /api/operations/tasks/assign         # Assign task (capacity enforced)
-GET  /api/operations/health/:orgId        # System health status
-POST /api/operations/andon/trigger        # Manual Andon trigger
-```
-
-### Finance
-
-```
-POST /api/finance/unit-economics/calculate  # Store snapshot
-GET  /api/finance/unit-economics/health/:orgId    # LTV:CAC gauge
-GET  /api/finance/unit-economics/j-curve/:orgId   # J-Curve data
-GET  /api/finance/unit-economics/rule-of-40/:orgId
-```
-
-### Legal
-
-```
-GET  /api/legal/ip-airlock/check/:userId  # Access permission
-POST /api/legal/ip-airlock/agreements     # Create agreement
-GET  /api/legal/vesting/alerts/:orgId     # Cliff & 83(b) alerts
-POST /api/legal/vesting/grants            # Create grant
-```
-
----
-
-## 🔐 Module Boundary Enforcement
-
-Run dependency analysis to prevent "Big Ball of Mud":
-
-```bash
-npm run lint:deps --workspace=@veroscale/backend
-```
-
-Rules enforced:
-- Operations ↔ Finance: No direct imports (use internal APIs)
-- Legal module: Isolated from others
-- Human Capital feedback: Privacy protected
-
----
-
-## 📊 Test Scenarios (Seed Data)
-
-After seeding, test these scenarios:
-
-| Scenario | Expected Behavior |
-|----------|-------------------|
-| `contractor@external.com` IP check | Returns `PENDING` - access blocked |
-| `dev@acme.com` cliff check | Alert: 29 days to approval |
-| LTV:CAC gauge | Shows `5.83:1` - GREEN |
-| Rule of 40 | Shows `35` - NEEDS_ATTENTION |
-
----
-
-## 🛠️ Technology Stack
-
-| Layer | Technology |
-|-------|------------|
-| Runtime | Node.js 20 LTS |
-| Language | TypeScript 5.x |
-| Backend | Express.js |
-| Database | PostgreSQL 16 + Prisma |
-| Frontend | React 18 + Vite |
-| State | Zustand |
-| Charts | Recharts |
-| Validation | Zod |
-
----
-
-## 📄 License
-
-Proprietary - All Rights Reserved
-
----
-
-*VeroScale: From Latin "Vero" (truth) and English "Scale" - the pursuit of absolute truth in business metrics.*
+*VeroScale: From Latin "Vero" (truth) and English "Scale".*
