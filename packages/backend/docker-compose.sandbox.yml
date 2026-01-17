@@ -21,7 +21,7 @@ services:
   # 2. The System Under Test (SUT)
   backend_sandbox:
     build:
-      context: .
+      context: ../../
       dockerfile: Dockerfile
     environment:
       NODE_ENV: test
