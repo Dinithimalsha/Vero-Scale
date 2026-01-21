@@ -8,6 +8,8 @@ COPY packages/backend/package*.json ./packages/backend/
 RUN npm ci --workspace=@veroscale/backend
 COPY packages/backend ./packages/backend
 COPY tsconfig.base.json ./
+# Generate Prisma Client BEFORE TypeScript compilation
+RUN npx prisma generate --schema=./packages/backend/prisma/schema.prisma
 RUN npm run build --workspace=@veroscale/backend
 
 # Build stage for frontend
