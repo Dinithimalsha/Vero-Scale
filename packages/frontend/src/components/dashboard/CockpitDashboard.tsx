@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+
 
 /**
  * THE COCKPIT
@@ -52,7 +52,7 @@ export const CockpitDashboard: React.FC = () => {
                                 style={{ width: `${(heartStats.ratio / 5) * 100}%` }}
                             />
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">Target > 3.0 | Circuit Breaker at 3.0</p>
+                        <p className="text-xs text-gray-500 mt-2">Target &gt; 3.0 | Circuit Breaker at 3.0</p>
                     </div>
                 </Card>
 
