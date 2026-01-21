@@ -54,26 +54,34 @@ const envSchema = z.object({
 
 const parsed = envSchema.safeParse(process.env);
 
-if (!parsed.success) {
+let envData: z.infer<typeof envSchema>;
+
+if (parsed.success) {
+    envData = parsed.data;
+} else {
     // 🛡️ TEST HARNESS FALLBACK (Final Safety Net)
     // If validation fails, but we are running unit tests, return a dummy config instead of crashing.
     if (process.env.NODE_ENV === 'test') {
         console.warn("⚠️ Environment Validation Failed in TEST mode. Using Mock Config.");
-        // We cast this to 'any' just to bypass the strict Zod type inference for this fallback
-        // ensuring the test runner survives.
+
+        // Use 'any' to bypass strict schema matching for the fallback, ensuring the runner survives.
+        // We match the *output* type of the schema (e.g. PORT is a number)
         const mockConfig: any = {
             DATABASE_URL: 'postgresql://mock:5432/test',
             PORT: 3000,
             NODE_ENV: 'test',
             FRONTEND_URL: 'http://localhost:5173',
             JWT_SECRET: 'mock-secret-key-32-chars-minimum-length-required',
+            SLACK_CRITICAL_CHANNEL: '#engineering-critical',
+            PLAID_ENV: 'sandbox',
+            DOCUSIGN_BASE_PATH: 'https://demo.docusign.net/restapi'
         };
-        // Mutate process.env so subsequent reads succeed
+
+        // Mutate process.env so subsequent reads by libraries (like Prisma) succeed
         process.env.DATABASE_URL = mockConfig.DATABASE_URL;
         process.env.JWT_SECRET = mockConfig.JWT_SECRET;
 
-        // Return a mock 'parsed' object so the const config assignment below works
-        Object.assign(parsed, { success: true, data: mockConfig });
+        envData = mockConfig;
     } else {
         console.error('❌ Invalid environment variables:');
         console.error(parsed.error.format());
@@ -83,48 +91,48 @@ if (!parsed.success) {
 
 export const config = {
     // Database
-    databaseUrl: parsed.data.DATABASE_URL,
+    databaseUrl: envData.DATABASE_URL,
 
     // Server
-    port: parsed.data.PORT,
-    nodeEnv: parsed.data.NODE_ENV,
-    isDev: parsed.data.NODE_ENV === 'development',
-    isProd: parsed.data.NODE_ENV === 'production',
-    isTest: parsed.data.NODE_ENV === 'test',
+    port: envData.PORT,
+    nodeEnv: envData.NODE_ENV,
+    isDev: envData.NODE_ENV === 'development',
+    isProd: envData.NODE_ENV === 'production',
+    isTest: envData.NODE_ENV === 'test',
 
     // Frontend
-    frontendUrl: parsed.data.FRONTEND_URL,
+    frontendUrl: envData.FRONTEND_URL,
 
     // Auth
-    jwtSecret: parsed.data.JWT_SECRET,
+    jwtSecret: envData.JWT_SECRET,
 
     // GitHub
     github: {
-        appId: parsed.data.GITHUB_APP_ID,
-        privateKey: parsed.data.GITHUB_PRIVATE_KEY,
-        webhookSecret: parsed.data.GITHUB_WEBHOOK_SECRET,
+        appId: envData.GITHUB_APP_ID,
+        privateKey: envData.GITHUB_PRIVATE_KEY,
+        webhookSecret: envData.GITHUB_WEBHOOK_SECRET,
     },
 
     // Slack
     slack: {
-        botToken: parsed.data.SLACK_BOT_TOKEN,
-        signingSecret: parsed.data.SLACK_SIGNING_SECRET,
-        criticalChannel: parsed.data.SLACK_CRITICAL_CHANNEL,
+        botToken: envData.SLACK_BOT_TOKEN,
+        signingSecret: envData.SLACK_SIGNING_SECRET,
+        criticalChannel: envData.SLACK_CRITICAL_CHANNEL,
     },
 
     // Plaid
     plaid: {
-        clientId: parsed.data.PLAID_CLIENT_ID,
-        secret: parsed.data.PLAID_SECRET,
-        env: parsed.data.PLAID_ENV,
+        clientId: envData.PLAID_CLIENT_ID,
+        secret: envData.PLAID_SECRET,
+        env: envData.PLAID_ENV,
     },
 
     // DocuSign
     docusign: {
-        integrationKey: parsed.data.DOCUSIGN_INTEGRATION_KEY,
-        userId: parsed.data.DOCUSIGN_USER_ID,
-        accountId: parsed.data.DOCUSIGN_ACCOUNT_ID,
-        basePath: parsed.data.DOCUSIGN_BASE_PATH,
+        integrationKey: envData.DOCUSIGN_INTEGRATION_KEY,
+        userId: envData.DOCUSIGN_USER_ID,
+        accountId: envData.DOCUSIGN_ACCOUNT_ID,
+        basePath: envData.DOCUSIGN_BASE_PATH,
     },
 } as const;
 
